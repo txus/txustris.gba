@@ -1,0 +1,19 @@
+.{
+    .name = .txustris,
+    .version = "0.0.0",
+    .fingerprint = 0xb939a3bf7034f471, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .ziggba = .{
+            .url = "git+https://github.com/txus/ziggba.git#efe97711ce8560064b325e881364f06b81146ca1",
+            .hash = "ziggba-0.0.0-t2qCXjbsCAC5VL_zY5Ec2uJE9uSXHbbBANdOFt_qfvLd",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}

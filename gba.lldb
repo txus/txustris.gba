@@ -1,0 +1,7 @@
+# Usage: lldb -s gba.lldb
+# Builds (-Ddebug), (re)launches mGBA with its GDB server, and attaches.
+settings set plugin.process.gdb-remote.packet-timeout 30
+command script import tools/mgba.py
+target create --arch armv4t-none-eabi zig-out/bin/txustris
+gdb-remote localhost:2345
+breakpoint set --name debug_panic.panic

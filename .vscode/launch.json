@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "mGBA (attach :2345)",
+      "type": "lldb-dap",
+      "request": "attach",
+      "program": "${workspaceFolder}/zig-out/bin/txustris",
+      "targetTriple": "armv4t-none-eabi",
+      "initCommands": [
+        "settings set plugin.process.gdb-remote.packet-timeout 30",
+        "command script import ${workspaceFolder}/tools/mgba.py"
+      ],
+      "attachCommands": [
+        "gdb-remote localhost:2345"
+      ],
+      "preRunCommands": [
+        "breakpoint set --name debug_panic.panic"
+      ]
+    }
+  ]
+}
