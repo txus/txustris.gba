@@ -12,14 +12,26 @@ pub fn build(std_b: *std.Build) void {
     const rom = b.addExecutable(.{
         .name = rom_name,
         .root_source_file = b.path("src/main.zig"),
-        .build_options = .{ .text_charsets = .all },
+        .build_options = .{ .text_charsets = .{ .latin = true } },
     });
+
+    // Convert the block sprite to 4bpp tiles, embedded via `@embedFile("block_tiles")`.
+    // Index 0 is reserved for transparency, leaving room for the PNG's 9 grays.
+    const block = b.addConvertImage(.{
+        .path = b.path("assets/block8.png"),
+        .format = .tiles_4bpp,
+        .palettizer = .{ .naive = 16 },
+    });
+    rom.addAsset("block_tiles", block.data);
+    rom.addAsset("block_pal", block.palette);
 
     // Also install the ELF (zig-out/bin/txustris) so lldb has symbols.
     std_b.installArtifact(rom.step);
 
     const run_cmd = std_b.addSystemCommand(&.{"mgba"});
-    run_cmd.addFileArg(rom.rom);
+    run_cmd.addFileArg(std_b.graph.path(.install_bin, "txustris.gba"));
+    run_cmd.step.dependOn(std_b.getInstallStep());
+
     std_b.step("run", "Run the ROM in mGBA").dependOn(&run_cmd.step);
 
     // mGBA starts paused with a GDB stub on :2345; attach with `lldb -s gba.lldb`.
