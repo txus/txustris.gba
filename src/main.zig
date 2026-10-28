@@ -9,11 +9,27 @@ export var header linksection(".gbaheader") = gba.Header.init("TXUSTRIS", "TXRS"
 const DAS_FRAMES = 12;
 const ARR_FRAMES = 3;
 
-const GRAVITY_FRAMES = 48;
+const GRAVITY_TABLE = [_]u8{
+    48, 43, 38, 33, 28, 23, 18, 13, 8, 6, // levels 0–9
+    5, 5, 5, 4, 4, 4, 3, 3, 3,            // 10–18
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2,         // 19–28
+    1,                                    // 29+
+};
 const SOFT_DROP_FRAMES = 2;
+
+const SPAWN_ROTATION = [7]u4{ 0, 2, 0, 1, 3, 0, 0 }; // bar, T(up), O, L(flat), J(flat), S, Z
+
+fn gravityFrames(level: u32) u8 {
+    return GRAVITY_TABLE[@min(level, GRAVITY_TABLE.len - 1)];
+}
 
 const LOCK_DELAY_FRAMES: u8 = 30;
 const MAX_LOCK_RESETS: u8 = 15;
+
+const ANIMATION_FRAMES = 20;
+const FLASH_PALETTE = 8;
+const BLINK_FRAMES = 3; // frames per white/normal phase of blinking
+const FADE_FRAMES = 6;  // final frames fading to the empty color
 
 const block_tiles align(4) = embed("block_tiles");
 const block_pal align(4) = embed("block_pal");
@@ -177,7 +193,7 @@ const Grid = struct {
                 for (18..20) |row_idx| {
                     for (0..GRID_WIDTH) |col_idx| {
                         if (col_idx != 7)  {
-                            self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 6)));
+                            self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 7)));
                         }
                     }
                 }
@@ -186,9 +202,9 @@ const Grid = struct {
                 for (17..20) |row_idx| {
                     for (0..GRID_WIDTH) |col_idx| {
                         if (row_idx == 18 and col_idx != 7)  {
-                            self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 6)));
+                            self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 7)));
                         } else if (row_idx != 18 and col_idx != 5) {
-                            self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 6)));
+                            self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 7)));
                         }
                     }
                 }
@@ -357,9 +373,9 @@ const GamePiece = struct {
         const min_x = piece_bounds[piece_type][rotation][0][0];
         const max_x = piece_bounds[piece_type][rotation][1][0];
 
-        const piece_width: u8 = @intCast(max_x - min_x);
-
-        const x: i16 = (GRID_WIDTH / 2) - (piece_width / 2);
+        const width: u8 = @intCast(max_x - min_x + 1);
+        const left: i16 = (GRID_WIDTH - width) / 2;
+        const x: i16 = left - min_x;
 
         const min_y = @as(i16, piece_bounds[piece_type][rotation][0][1]);
         const y: i16 = 0 - min_y;
@@ -446,20 +462,17 @@ const GamePiece = struct {
     fn draw(self: *GamePiece, oam: *ShadowOAM) void {
         const first_object = @as(u16, self.piece_type) * 4; // 4 blocks per self
         for (pieces[self.piece_type].cells[self.rotation], 0..) |cell, i| {
-            const local_cell_x = self.x + cell[0];
-            const local_cell_y = self.y + cell[1];
+            // Position and visibility come from each cell's own grid coordinates, not the
+            // 4x4 box origin: the box can start above the grid (y = -1) while its cells don't.
+            const cell_x = self.x + cell[0];
+            const cell_y = self.y + cell[1];
 
-            const grid_x: i16 = gridX(self.x);
-            const grid_y: i16 = gridY(self.y);
-            const should_render = local_cell_x >= 0 and local_cell_x < GRID_WIDTH and local_cell_y >= 0 and local_cell_y < GRID_HEIGHT and grid_x >= 0 and grid_y >= 0;
-            
+            const should_render = cell_x >= 0 and cell_x < GRID_WIDTH and cell_y >= 0 and cell_y < GRID_HEIGHT;
+
             if (should_render) {
-                const casted_grid_x: u9 = @intCast(grid_x);
-                const casted_grid_y: u8 = @intCast(grid_y);
-
                 oam[first_object + i] = .init(.{
-                    .x = casted_grid_x + @as(u9, cell[0]) * block_size,
-                    .y = casted_grid_y + @as(u8, cell[1]) * block_size,
+                    .x = @intCast(gridX(cell_x)),
+                    .y = @intCast(gridY(cell_y)),
                     .base_tile = 0,
                     .palette = self.piece_type,
                 });
@@ -473,12 +486,12 @@ const GamePiece = struct {
 const grid_x_start: i16 = @intCast((gba.display.screen_width_tiles - GRID_WIDTH) / 2);
 const grid_y_start: i16 = @intCast((gba.display.screen_height_tiles - GRID_HEIGHT) / 2);
 
-const GameState = enum(u2) {
+const GameState = enum(u3) {
+    title,
     playing,
     clearing_line,
     game_over,
-    //paused,
-    //menu,
+    paused,
 };
 
 const InputState = struct {
@@ -497,7 +510,7 @@ const AnimationState = struct {
     frames_left: u32 = 0,
 };
 
-const text_charblock = 1;    // charblock 0 holds your block tile; keep text separate
+const text_charblock = 1;    // charblock 0 holds our block tile, keep text separate
 const text_first_tile = 1;   // tile 0 stays blank = transparent everywhere else
 const text_palette = 15;
 
@@ -506,12 +519,20 @@ const TextBox = struct {
     y: u5,
     w: u6,
     h: u6,
+    first_tile: u10, // tile index within text_charblock
 
     map: gba.display.BackgroundMap,
 
-    fn init(map: gba.display.BackgroundMap, x: u5, y: u5, w: u6, h: u6) TextBox {
+    fn init(map: gba.display.BackgroundMap, next_tile: *u10, x: u5, y: u5, w: u6, h: u6) TextBox {
+        //must fit in visible screen (30x20 tiles)
+        std.debug.assert(@as(u8, x) + w <= gba.display.screen_width_tiles);
+        std.debug.assert(@as(u8, y) + h <= gba.display.screen_height_tiles);
+
+        const first_tile = next_tile.*;
+        next_tile.* += @as(u10, w) * h;
+
         map.getBaseScreenblock().fillRectLinear(
-            .{ .tile = text_first_tile, .palette = text_palette },
+            .{ .tile = first_tile, .palette = text_palette },
             x, y, w, h,
         );
 
@@ -520,18 +541,25 @@ const TextBox = struct {
             .y = y,
             .w = w,
             .h = h,
+            .first_tile = first_tile,
             .map = map,
         };
     }
 
     fn surface(self: *TextBox) gba.image.SurfaceTiles4BppVram {
         return gba.display.bg_blocks.getSurface4Bpp(
-            text_charblock * 512 + text_first_tile,
+            text_charblock * 512 + @as(u16, self.first_tile),
             self.w,
             self.h,
         );
     }
 };
+
+fn mix(from: u5, to: u5, t: u32, max: u32) u5 {
+    const f: i32 = from;
+    const d: i32 = @as(i32, to) - f;
+    return @intCast(f + @divTrunc(d * @as(i32, @intCast(t)), @as(i32, @intCast(max))));
+}
 
 const Game = struct {
     state: GameState = .playing,
@@ -539,6 +567,8 @@ const Game = struct {
     gravity_frames: u8 = 0,
     save_data: SaveData,
     score: u32 = 0,
+    level: u32 = 0,
+    lines_cleared: u32 = 0,
     input_state: InputState = .{},
     animation_state: AnimationState = .{},
     lock_state: LockState = .{},
@@ -547,7 +577,12 @@ const Game = struct {
     grid_map: gba.display.BackgroundMap,
     background_map: gba.display.BackgroundMap,
     current_piece: ?GamePiece,
+    bag: random.Bag = .{},
+    // game state boxes
     score_text: TextBox,
+    high_scores_box: TextBox,
+    level_box: TextBox,
+    message_box: TextBox,
 
     fn setupText() gba.display.BackgroundMap {
         gba.display.bg_palette.banks[text_palette][1] = .white;
@@ -583,6 +618,42 @@ const Game = struct {
         self.drawScore(self.score);
     }
 
+    fn updateDifficulty(self: *Game) void {
+        self.level = self.lines_cleared / 10;
+        self.drawLevel();
+    }
+
+    fn drawGameOver(self: *Game) void {
+        const s = self.message_box.surface();
+        s.draw().fill(0);    // text() only sets pixels, so erase first
+        s.draw().text("GAME OVER", .init(1), .{ .x = 0, .y = 0 });
+        s.draw().text("Press Start", .init(1), .{ .x = 0, .y = 14 });
+    }
+
+    fn drawLevel(self: *Game) void {
+        var buf: [11]u8 = undefined;
+        const len = gba.format.formatDecimalI32(&buf, @intCast(self.level+1), .{});
+
+        const s = self.level_box.surface();
+        s.draw().fill(0);    // text() only sets pixels, so erase first
+        s.draw().text("LEVEL", .init(1), .{ .x = 0, .y = 0 });
+        s.draw().text(buf[0..len], .init(1), .{ .x = 0, .y = 14 });
+    }
+
+    fn drawHighScores(self: *Game) void {
+        const s = self.high_scores_box.surface();
+        s.draw().fill(0);
+        s.draw().text("High Scores", .init(1), .{ .x = 0, .y = 0 });
+
+        for (self.save_data.scores, 0..) |score, idx| {
+            if (score > 0) {
+                var buf: [11]u8 = undefined;
+                const len = gba.format.formatDecimalI32(&buf, @intCast(score), .{});
+                s.draw().text(buf[0..len], .init(1), .{ .x = 0, .y = (idx * 14) + 14 });
+            }
+        }
+    }
+
     fn drawScore(self: *Game, score: u32) void {
         var buf: [11]u8 = undefined;
         const len = gba.format.formatDecimalI32(&buf, @intCast(score), .{});
@@ -598,14 +669,17 @@ const Game = struct {
             piece.hide(&self.shadow_oam);
         }
 
+        const piece_type = self.bag.next();
         var current_piece: GamePiece = .init(
-            @intCast(random.qran_range(0, 6)),
-            @intCast(random.qran_range(0, 3)),
+            piece_type,
+            SPAWN_ROTATION[piece_type]
         );
 
         if (!self.grid.fits(current_piece.piece_type, current_piece.rotation, current_piece.x, current_piece.y)) {
             self.state = .game_over;
             self.recordHighScore();
+            self.drawHighScores();
+            self.drawGameOver();
             return;
         }
 
@@ -634,21 +708,21 @@ const Game = struct {
         const background_map = setupText();
 
         const save_data = self.save_data;
+        const frame_counter = self.frame_counter;
+        var next_tile: u10 = text_first_tile;
 
         self.* = .{
+            .frame_counter = frame_counter,
             .grid = grid,
             .shadow_oam = @splat(.{ .mode = .hidden }),
             .grid_map = grid_map,
             .current_piece = null,
             .background_map = background_map,
             .save_data = save_data,
-            .score_text = .init(
-                background_map,
-                4,
-                1,
-                8,
-                4,
-            )
+            .score_text = .init(background_map, &next_tile, 1, 1, 8, 4), // left, top
+            .high_scores_box = .init(background_map, &next_tile, 1, 7, 8, 11), // left: title + 5 scores
+            .level_box = .init(background_map, &next_tile, 21, 1, 8, 4), // right, top
+            .message_box = .init(background_map, &next_tile, 21, 7, 8, 4), // right: GAME OVER
         };
     }
 
@@ -668,14 +742,69 @@ const Game = struct {
         });
 
         var game: Game = undefined;
+        game.frame_counter = 0;
         game.save_data = SaveData.load();
         game.reset();
         game.drawScore(game.score);
+        game.drawLevel();
+        game.drawHighScores();
+
+        game.state = .title;
+        const s = game.message_box.surface();
+        s.draw().fill(0);
+        s.draw().text("Press Start", .init(1), .{ .x = 0, .y = 0 });
         return game;
+    }
+
+    /// Seeds the RNG from how many frames passed before the player pressed Start,
+    /// then starts a fresh game. Call this on the Start press.
+    fn startGame(self: *Game) void {
+        // Debug builds keep the fixed seed so test runs are reproducible.
+        if (@import("builtin").mode != .debug) {
+            _ = random.sqran(@bitCast(self.frame_counter));
+        }
+
+        self.reset();
+        self.drawScore(self.score);
+        self.drawLevel();
+        self.message_box.surface().draw().fill(0); // clear "Press Start" / "GAME OVER"
+        self.spawnPiece();
     }
 
     fn saveHighScores(self: *Game) void {
         self.save_data.save();
+    }
+
+    fn animateFullLines(self: *Game, frames_left: u32, max_frames: u32) void {
+        const elapsed = max_frames - frames_left; // 0, 1, ... max_frames - 1
+
+        for (block_grays, 0..) |gray, i| {
+            const empty: gba.ColorRgb555 = .rgb(darken(gray.r), darken(gray.g), darken(gray.b));
+
+            gba.display.bg_palette.banks[FLASH_PALETTE][i] = if (frames_left <= FADE_FRAMES) blk: {
+                const t = FADE_FRAMES - frames_left + 1; // 1 .. FADE_FRAMES
+                break :blk .rgb(
+                    mix(31, empty.r, t, FADE_FRAMES),
+                    mix(31, empty.g, t, FADE_FRAMES),
+                    mix(31, empty.b, t, FADE_FRAMES),
+                );
+            } else if ((elapsed / BLINK_FRAMES) % 2 == 0)
+                .white
+            else
+                gray;
+        }
+
+        const full_lines = self.grid._getFullLines();
+        for (0..GRID_HEIGHT) |y| {
+            if (!full_lines[y]) continue;
+            for (0..GRID_WIDTH) |x| {
+                self.grid_map.getBaseScreenblock().set(
+                    @intCast(grid_x_start + x),
+                    @intCast(grid_y_start + y),
+                    .{ .tile = 1, .palette = FLASH_PALETTE },
+                );
+            }
+        }
     }
 
     fn lock(self: *Game) void {
@@ -688,9 +817,7 @@ const Game = struct {
         const full_line_count = self.grid.getFullLines();
         if (full_line_count > 0) {
             self.state = .clearing_line;
-
-            // each line takes 100ms = 1/10th of 60fps = 6 frames
-            self.animation_state.frames_left = full_line_count * 6;
+            self.animation_state.frames_left = ANIMATION_FRAMES;
         } else {
             self.spawnPiece();
         }
@@ -700,8 +827,6 @@ const Game = struct {
 
 pub export fn main() void {
     var game: Game = .init();
-
-    game.spawnPiece();
 
     while (true) : (game.frame_counter +%= 1) {
         gba.bios.vblankIntrWait();
@@ -718,21 +843,26 @@ pub export fn main() void {
         }
 
         switch(game.state) {
-            .game_over => {
+            .title, .game_over => {
                 if (game.input_state.input.isJustPressed(.start)) {
-                    game.reset();
-                    game.spawnPiece();
+                    game.startGame();
+                }
+            },
+            .paused => {
+                if (game.input_state.input.isJustPressed(.select)) {
+                    game.state = .playing;
                 }
             },
             .clearing_line => {
-                //game.animation_state.frames_left -= 1;
-                // TODO: remove this and actually animate it
-                game.animation_state.frames_left = 0;
+                game.animateFullLines(game.animation_state.frames_left, ANIMATION_FRAMES);
 
+                game.animation_state.frames_left -= 1;
                 if (game.animation_state.frames_left == 0) {
                     game.state = .playing;
 
                     const lines_cleared = game.grid.getFullLines();
+                    game.lines_cleared += lines_cleared;
+                    game.updateDifficulty();
                     game.addScore(15 * lines_cleared * lines_cleared);
 
                     game.grid.deleteFullLines();
@@ -780,7 +910,8 @@ pub export fn main() void {
                 } else {
                     game.lock_state.frames = 0;
 
-                    const reference_gravity: u16 = if (game.input_state.input.isPressed(.down)) SOFT_DROP_FRAMES else GRAVITY_FRAMES;
+                    const level_frames = gravityFrames(game.level);
+                    const reference_gravity = if (game.input_state.input.isPressed(.down)) @min(SOFT_DROP_FRAMES, level_frames) else level_frames;
 
                     game.gravity_frames += 1;
 
