@@ -1,6 +1,7 @@
 const std = @import("std");
 const gba = @import("gba");
 const random = @import("random.zig");
+const music = @import("music.zig");
 
 pub const panic = gba.debug.std_panic;
 
@@ -827,9 +828,11 @@ const Game = struct {
 
 pub export fn main() void {
     var game: Game = .init();
+    music.play();
 
     while (true) : (game.frame_counter +%= 1) {
         gba.bios.vblankIntrWait();
+        music.update();
 
         game.input_state.input.poll();
 

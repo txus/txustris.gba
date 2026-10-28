@@ -25,6 +25,13 @@ pub fn build(std_b: *std.Build) void {
     rom.addAsset("block_tiles", block.data);
     rom.addAsset("block_pal", block.palette);
 
+    // Convert the music to raw signed 8-bit mono PCM at 13379 Hz for DirectSound,
+    // embedded via `@embedFile("music")` (see src/music.zig). Needs ffmpeg on PATH.
+    const music = std_b.addSystemCommand(&.{ "ffmpeg", "-loglevel", "error", "-y", "-i" });
+    music.addFileArg(b.path("assets/music.ogg"));
+    music.addArgs(&.{ "-ac", "1", "-ar", "13379", "-f", "s8" });
+    rom.addAsset("music", music.addOutputFileArg("music.raw"));
+
     // Also install the ELF (zig-out/bin/txustris) so lldb has symbols.
     std_b.installArtifact(rom.step);
 
