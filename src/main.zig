@@ -12,9 +12,9 @@ const ARR_FRAMES = 3;
 
 const GRAVITY_TABLE = [_]u8{
     48, 43, 38, 33, 28, 23, 18, 13, 8, 6, // levels 0–9
-    5, 5, 5, 4, 4, 4, 3, 3, 3,            // 10–18
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2,         // 19–28
-    1,                                    // 29+
+    5, 5, 5, 4, 4, 4, 3, 3, 3, // 10–18
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 19–28
+    1, // 29+
 };
 const SOFT_DROP_FRAMES = 2;
 
@@ -30,7 +30,7 @@ const MAX_LOCK_RESETS: u8 = 15;
 const ANIMATION_FRAMES = 20;
 const FLASH_PALETTE = 8;
 const BLINK_FRAMES = 3; // frames per white/normal phase of blinking
-const FADE_FRAMES = 6;  // final frames fading to the empty color
+const FADE_FRAMES = 6; // final frames fading to the empty color
 
 const block_tiles align(4) = embed("block_tiles");
 const block_pal align(4) = embed("block_pal");
@@ -52,48 +52,69 @@ const Piece = struct {
 };
 
 const pieces = [_]Piece{
-    .{ .cells = .{ // long bar
-        .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 3, 1 } },
-        .{ .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 }, .{ 1, 3 } },
-        .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 3, 1 } },
-        .{ .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 }, .{ 1, 3 } },
-    }, .tint = .cyan },
-    .{ .cells = .{ // down-looking indent
-        .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
-        .{ .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 1, 2 } },
-        .{ .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 } },
-        .{ .{ 1, 0 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
-    }, .tint = .magenta },
-    .{ .cells = .{ // square
-        .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
-        .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
-        .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
-        .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
-    }, .tint = .yellow },
-    .{ .cells = .{ // L
-        .{ .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 }, .{ 2, 2 } },
-        .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 0, 2 } },
-        .{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 } },
-        .{ .{ 2, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 } },
-    }, .tint = .rgb(31, 16, 0) },
-    .{ .cells = .{ // h-flipped L
-        .{ .{ 1, 0 }, .{ 1, 1 }, .{ 0, 2 }, .{ 1, 2 } },
-        .{ .{ 0, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 } },
-        .{ .{ 1, 0 }, .{ 2, 0 }, .{ 1, 1 }, .{ 1, 2 } },
-        .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 2, 2 } },
-    }, .tint = .blue },
-    .{ .cells = .{ // _=-
-        .{ .{ 1, 0 }, .{ 2, 0 }, .{ 0, 1 }, .{ 1, 1 } },
-        .{ .{ 0, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 1, 2 } },
-        .{ .{ 1, 0 }, .{ 2, 0 }, .{ 0, 1 }, .{ 1, 1 } },
-        .{ .{ 0, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 1, 2 } },
-    }, .tint = .green },
-    .{ .cells = .{ // -=_
-        .{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 2, 1 } },
-        .{ .{ 2, 0 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
-        .{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 2, 1 } },
-        .{ .{ 2, 0 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
-    }, .tint = .red },
+    .{
+        .cells = .{ // long bar
+            .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 3, 1 } },
+            .{ .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 }, .{ 1, 3 } },
+            .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 3, 1 } },
+            .{ .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 }, .{ 1, 3 } },
+        },
+        .tint = .cyan,
+    },
+    .{
+        .cells = .{ // down-looking indent
+            .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
+            .{ .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 1, 2 } },
+            .{ .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 } },
+            .{ .{ 1, 0 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
+        },
+        .tint = .magenta,
+    },
+    .{
+        .cells = .{ // square
+            .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
+            .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
+            .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
+            .{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 1, 1 } },
+        },
+        .tint = .yellow,
+    },
+    .{
+        .cells = .{ // L
+            .{ .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 }, .{ 2, 2 } },
+            .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 0, 2 } },
+            .{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 1, 2 } },
+            .{ .{ 2, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 } },
+        },
+        .tint = .rgb(31, 16, 0),
+    },
+    .{
+        .cells = .{ // h-flipped L
+            .{ .{ 1, 0 }, .{ 1, 1 }, .{ 0, 2 }, .{ 1, 2 } },
+            .{ .{ 0, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 } },
+            .{ .{ 1, 0 }, .{ 2, 0 }, .{ 1, 1 }, .{ 1, 2 } },
+            .{ .{ 0, 1 }, .{ 1, 1 }, .{ 2, 1 }, .{ 2, 2 } },
+        },
+        .tint = .blue,
+    },
+    .{
+        .cells = .{ // _=-
+            .{ .{ 1, 0 }, .{ 2, 0 }, .{ 0, 1 }, .{ 1, 1 } },
+            .{ .{ 0, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 1, 2 } },
+            .{ .{ 1, 0 }, .{ 2, 0 }, .{ 0, 1 }, .{ 1, 1 } },
+            .{ .{ 0, 0 }, .{ 0, 1 }, .{ 1, 1 }, .{ 1, 2 } },
+        },
+        .tint = .green,
+    },
+    .{
+        .cells = .{ // -=_
+            .{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 2, 1 } },
+            .{ .{ 2, 0 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
+            .{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 2, 1 } },
+            .{ .{ 2, 0 }, .{ 1, 1 }, .{ 2, 1 }, .{ 1, 2 } },
+        },
+        .tint = .red,
+    },
 };
 
 fn bounds(piece_index: u4) [4][2][2]u2 {
@@ -167,14 +188,10 @@ inline fn gridY(y: i16) i16 {
     return @intCast((grid_y_start + y) * block_size);
 }
 
-
 const GRID_WIDTH = 10;
 const GRID_HEIGHT = 20;
 
-const Cell = enum(u4) {
-    empty = 8,
-    _
-};
+const Cell = enum(u4) { empty = 8, _ };
 
 const DebugScenario = enum(u4) {
     almost_two_lines,
@@ -193,7 +210,7 @@ const Grid = struct {
             .almost_two_lines => {
                 for (18..20) |row_idx| {
                     for (0..GRID_WIDTH) |col_idx| {
-                        if (col_idx != 7)  {
+                        if (col_idx != 7) {
                             self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 7)));
                         }
                     }
@@ -202,14 +219,14 @@ const Grid = struct {
             .two_non_consecutive_lines => {
                 for (17..20) |row_idx| {
                     for (0..GRID_WIDTH) |col_idx| {
-                        if (row_idx == 18 and col_idx != 7)  {
+                        if (row_idx == 18 and col_idx != 7) {
                             self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 7)));
                         } else if (row_idx != 18 and col_idx != 5) {
                             self._grid[col_idx][row_idx] = @fromBackingInt(@intCast(random.qran_range(0, 7)));
                         }
                     }
                 }
-            }
+            },
         }
     }
 
@@ -241,17 +258,9 @@ const Grid = struct {
         for (self._grid, 0..) |column, x| {
             for (column, 0..) |cell, y| {
                 if (cell == .empty) {
-                    grid_map.getBaseScreenblock().set(
-                        @intCast(grid_x_start + x),
-                        @intCast(grid_y_start + y),
-                        .{ .tile = 1, .palette = 7 }
-                    );
+                    grid_map.getBaseScreenblock().set(@intCast(grid_x_start + x), @intCast(grid_y_start + y), .{ .tile = 1, .palette = 7 });
                 } else {
-                    grid_map.getBaseScreenblock().set(
-                        @intCast(grid_x_start + x),
-                        @intCast(grid_y_start + y),
-                        .{ .tile = 1, .palette = @backingInt(cell) }
-                    );
+                    grid_map.getBaseScreenblock().set(@intCast(grid_x_start + x), @intCast(grid_y_start + y), .{ .tile = 1, .palette = @backingInt(cell) });
                 }
             }
         }
@@ -278,12 +287,14 @@ const Grid = struct {
 
         var count: u32 = 0;
         for (full_lines) |line| {
-            if (line) { count += 1; }
+            if (line) {
+                count += 1;
+            }
         }
 
         return count;
     }
-    
+
     fn hasFullLines(self: *Grid) bool {
         return self.getFullLines() > 0;
     }
@@ -310,13 +321,13 @@ const Grid = struct {
                 for (0..clearing_region_len) |clearing_row_idx| {
                     const target_row_idx = clearing_region_len - 1 - clearing_row_idx;
                     if (target_row_idx > 0) {
-                        self.moveLine(target_row_idx-1, target_row_idx);
+                        self.moveLine(target_row_idx - 1, target_row_idx);
                     } else {
                         self.clearLine(target_row_idx);
                     }
                 }
             }
-         }
+        }
     }
 };
 
@@ -381,7 +392,7 @@ const GamePiece = struct {
         const min_y = @as(i16, piece_bounds[piece_type][rotation][0][1]);
         const y: i16 = 0 - min_y;
 
-        return .{.piece_type = piece_type, .x = x, .y = y, .rotation = rotation };
+        return .{ .piece_type = piece_type, .x = x, .y = y, .rotation = rotation };
     }
 
     fn canMoveRight(self: *GamePiece, grid: *Grid) bool {
@@ -511,8 +522,8 @@ const AnimationState = struct {
     frames_left: u32 = 0,
 };
 
-const text_charblock = 1;    // charblock 0 holds our block tile, keep text separate
-const text_first_tile = 1;   // tile 0 stays blank = transparent everywhere else
+const text_charblock = 1; // charblock 0 holds our block tile, keep text separate
+const text_first_tile = 1; // tile 0 stays blank = transparent everywhere else
 const text_palette = 15;
 
 const TextBox = struct {
@@ -534,7 +545,10 @@ const TextBox = struct {
 
         map.getBaseScreenblock().fillRectLinear(
             .{ .tile = first_tile, .palette = text_palette },
-            x, y, w, h,
+            x,
+            y,
+            w,
+            h,
         );
 
         return .{
@@ -624,19 +638,34 @@ const Game = struct {
         self.drawLevel();
     }
 
+    fn pause(self: *Game) void {
+        self.state = .paused;
+
+        const s = self.message_box.surface();
+        s.draw().fill(0); // text() only sets pixels, so erase first
+        s.draw().text("PAUSED", .init(1), .{ .x = 0, .y = 0 });
+        s.draw().text("Press Select", .init(1), .{ .x = 0, .y = 14 });
+    }
+
+    fn unpause(self: *Game) void {
+        self.state = .playing;
+        const s = self.message_box.surface();
+        s.draw().fill(0);
+    }
+
     fn drawGameOver(self: *Game) void {
         const s = self.message_box.surface();
-        s.draw().fill(0);    // text() only sets pixels, so erase first
+        s.draw().fill(0); // text() only sets pixels, so erase first
         s.draw().text("GAME OVER", .init(1), .{ .x = 0, .y = 0 });
         s.draw().text("Press Start", .init(1), .{ .x = 0, .y = 14 });
     }
 
     fn drawLevel(self: *Game) void {
         var buf: [11]u8 = undefined;
-        const len = gba.format.formatDecimalI32(&buf, @intCast(self.level+1), .{});
+        const len = gba.format.formatDecimalI32(&buf, @intCast(self.level + 1), .{});
 
         const s = self.level_box.surface();
-        s.draw().fill(0);    // text() only sets pixels, so erase first
+        s.draw().fill(0); // text() only sets pixels, so erase first
         s.draw().text("LEVEL", .init(1), .{ .x = 0, .y = 0 });
         s.draw().text(buf[0..len], .init(1), .{ .x = 0, .y = 14 });
     }
@@ -660,7 +689,7 @@ const Game = struct {
         const len = gba.format.formatDecimalI32(&buf, @intCast(score), .{});
 
         const s = self.score_text.surface();
-        s.draw().fill(0);    // text() only sets pixels, so erase first
+        s.draw().fill(0); // text() only sets pixels, so erase first
         s.draw().text("SCORE", .init(1), .{ .x = 0, .y = 0 });
         s.draw().text(buf[0..len], .init(1), .{ .x = 0, .y = 14 });
     }
@@ -671,10 +700,7 @@ const Game = struct {
         }
 
         const piece_type = self.bag.next();
-        var current_piece: GamePiece = .init(
-            piece_type,
-            SPAWN_ROTATION[piece_type]
-        );
+        var current_piece: GamePiece = .init(piece_type, SPAWN_ROTATION[piece_type]);
 
         if (!self.grid.fits(current_piece.piece_type, current_piece.rotation, current_piece.x, current_piece.y)) {
             self.state = .game_over;
@@ -822,7 +848,6 @@ const Game = struct {
         } else {
             self.spawnPiece();
         }
-
     }
 };
 
@@ -845,7 +870,7 @@ pub export fn main() void {
             game.input_state.das_frames = 0;
         }
 
-        switch(game.state) {
+        switch (game.state) {
             .title, .game_over => {
                 if (game.input_state.input.isJustPressed(.start)) {
                     game.startGame();
@@ -853,7 +878,7 @@ pub export fn main() void {
             },
             .paused => {
                 if (game.input_state.input.isJustPressed(.select)) {
-                    game.state = .playing;
+                    game.unpause();
                 }
             },
             .clearing_line => {
@@ -875,6 +900,10 @@ pub export fn main() void {
                 }
             },
             .playing => {
+                if (game.input_state.input.isJustPressed(.select)) {
+                    game.pause();
+                }
+
                 var moved = false;
                 if (dir_changed and dir != 0) {
                     moved = game.current_piece.?.attemptShift(&game.grid, dir);
@@ -909,7 +938,6 @@ pub export fn main() void {
                         game.lock_state.frames = 0;
                         game.lock();
                     }
-
                 } else {
                     game.lock_state.frames = 0;
 
@@ -933,7 +961,7 @@ pub export fn main() void {
                 if (game.current_piece) |*piece| {
                     piece.draw(&game.shadow_oam);
                 }
-            }
+            },
         }
 
         gba.mem.memcpy32(gba.display.objects, &game.shadow_oam, @sizeOf(ShadowOAM) / 4);
