@@ -852,6 +852,9 @@ const Game = struct {
 };
 
 pub export fn main() void {
+    // Nothing reads the marker, so without a reference --gc-sections drops it from the ROM.
+    std.mem.doNotOptimizeAway(&save_chip);
+
     var game: Game = .init();
     music.play();
 

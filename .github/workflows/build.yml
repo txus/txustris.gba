@@ -1,0 +1,112 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to bump for the release
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+# One release at a time, so two quick pushes can't compute the same version.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# Read-only by default. Only the release job (main pushes and manual runs) can write.
+# Pull requests from forks get a read-only token and no secrets regardless.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # build.zig runs arbitrary commands; don't leave the token in .git/config
+
+      # Third-party action: pinned to a commit so a moved tag can't change what runs.
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.17.0 # keep in sync with minimum_zig_version in build.zig.zon
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Build ROM (ReleaseFast)
+        run: zig build
+
+      - name: Check ROM
+        run: |
+          rom=zig-out/bin/txustris.gba
+          test -s "$rom"
+          ls -l "$rom"
+          # Emulators and flashcarts find the save type by scanning for this string.
+          offset=$(LC_ALL=C grep -obUa SRAM_V113 "$rom" | head -n1 | cut -d: -f1 || true)
+          if [ -z "$offset" ]; then
+            echo "::warning::SRAM_V113 marker not found in the ROM; saves rely on emulator autodetection"
+          elif [ $((offset % 4)) -ne 0 ]; then
+            echo "::warning::SRAM_V113 marker at offset $offset is not 4-byte aligned"
+          else
+            echo "SRAM_V113 marker at offset $offset"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: txustris-${{ github.sha }}
+          path: zig-out/bin/txustris.gba
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip release]')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # all tags, to find the latest version
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: txustris-${{ github.sha }}
+
+      - name: Compute next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump || 'patch' }}
+        run: |
+          latest=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            version=v0.1.0
+          else
+            IFS=. read -r major minor patch <<<"${latest#v}"
+            case "$BUMP" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              *)     patch=$((patch + 1)) ;;
+            esac
+            version="v$major.$minor.$patch"
+          fi
+          echo "latest=${latest:-none} next=$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mv txustris.gba "txustris-$VERSION.gba"
+          gh release create "$VERSION" "txustris-$VERSION.gba" \
+            --target "$GITHUB_SHA" \
+            --title "txustris $VERSION" \
+            --generate-notes
